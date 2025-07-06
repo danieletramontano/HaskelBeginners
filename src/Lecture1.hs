@@ -20,7 +20,6 @@ It's absolutely okay if you feel that your implementations are not
 perfect. You can return to these exercises after future lectures and
 improve your solutions if you see any possible improvements.
 -}
-
 module Lecture1
     ( makeSnippet
     , sumOfSquares
@@ -30,7 +29,6 @@ module Lecture1
     , strSum
     , lowerAndGreater
     ) where
-import Distribution.Compat.CharParsing (lower)
 
 -- VVV If you need to import libraries, do it after this line ... VVV
 
@@ -56,8 +54,8 @@ Explanation: @sumOfSquares 3 4@ should be equal to @9 + 16@ and this
 is 25.
 -}
 -- DON'T FORGET TO SPECIFY THE TYPE IN HERE
-sumOfSquares :: Double -> Double -> Double
-sumOfSquares x y = x^2 + y^2
+sumOfSquares :: Int -> Int -> Int
+sumOfSquares x y = x*x + y*y
 
 {- | Implement a function that returns the last digit of a given number.
 
@@ -70,8 +68,10 @@ sumOfSquares x y = x^2 + y^2
 
 -}
 -- DON'T FORGET TO SPECIFY THE TYPE IN HERE
+
 lastDigit :: Int -> Int
-lastDigit n = mod n 10
+lastDigit n = mod (abs n) 10
+
 
 
 {- | Write a function that takes three numbers and returns the
@@ -86,16 +86,16 @@ and 1 is the smallest, and 7 - 1 = 6.
 Try to use local variables (either let-in or where) to implement this
 function.
 -}
-minmax :: Double -> Double -> Double -> Double
-minmax x y z = maxVal - minVal
+minmax_2 :: Int -> Int -> Int -> Int
+minmax_2 x y z = maxVal - minVal
   where
     maxVal = max x (max y z)
     minVal = min x (min y z)
 
-minmaxLetIn :: Double -> Double -> Double -> Double
-minmaxLetIn x y z = let maxVal = max x (max y z)
-                        minVal = min x (min y z)
-                     in maxVal - minVal
+minmax :: Int -> Int -> Int -> Int
+minmax x y z = let maxVal = max x (max y z)
+                   minVal = min x (min y z)
+                   in maxVal - minVal
 
 {- | Implement a function that takes a string, start and end positions
 and returns a substring of a given string from the start position to
@@ -117,7 +117,7 @@ subString:: Int -> Int -> [Char] -> [Char]
 subString start end str
     | end < 0 = ""
     | end < start = ""
-    | otherwise = take (end - start + 1) (drop (max start 0) str)
+    | otherwise = take (end - max start 0 + 1) (drop (max start 0) str)
 
 {- | Write a function that takes a String — space separated numbers,
 and finds a sum of the numbers inside this string.

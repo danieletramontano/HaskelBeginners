@@ -1,5 +1,8 @@
 resolver: lts-20.10
 
+dependencies:
+  - Cabal
+
 flags:
   hedgehog-classes:
     aeson: false
