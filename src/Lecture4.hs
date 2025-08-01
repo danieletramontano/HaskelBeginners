@@ -112,7 +112,7 @@ import Data.Maybe (mapMaybe)
 import Text.Read (readMaybe)
 import Data.Foldable (toList)
 import Data.List (foldl')
-
+import Control.Monad (guard)
 
 -- Helper function to trim whitespace from both ends of a string
 trim :: String -> String
@@ -158,20 +158,13 @@ splitString str delimiter =
 
 parseRow :: String -> Maybe Row
 parseRow input =
-   case fields of
-      [productStr, tradeTypeStr, costStr] -> readMaybe (trim tradeTypeStr) >>= (\tradeType ->
-         readMaybe (trim costStr) >>= (\cost ->
-         if null productStr || cost < 0
-         then Nothing
-         else return (Row productStr tradeType cost)))
+   case splitString input ',' of
+      [productStr, tradeTypeStr, costStr] -> do
+         tradeType <- readMaybe (trim tradeTypeStr)
+         cost <- readMaybe (trim costStr)
+         guard (not (null productStr) && cost >= 0)
+         return (Row { rowProduct = productStr, rowTradeType = tradeType, rowCost = cost })
       _ -> Nothing
-   where fields = splitString input ','
-
-
-         -- do
-         -- tradeType <- readMaybe (trim tradeTypeStr)
-         -- cost <- readMaybe (trim costStr)
-         -- if productStr == "" || cost < 0 then Nothing else Just (Row productStr tradeType cost)
 
 
 {-
