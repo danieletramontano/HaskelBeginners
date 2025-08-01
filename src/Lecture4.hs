@@ -157,14 +157,21 @@ splitString str delimiter =
         (_:rest) -> before : splitString rest delimiter
 
 parseRow :: String -> Maybe Row
-parseRow input = do
-   let fields = splitString input ','
+parseRow input =
    case fields of
-      [productStr, tradeTypeStr, costStr] -> do
-         tradeType <- readMaybe (trim tradeTypeStr)
-         cost <- readMaybe (trim costStr)
-         if productStr == "" || cost < 0 then Nothing else Just (Row productStr tradeType cost)
+      [productStr, tradeTypeStr, costStr] -> readMaybe (trim tradeTypeStr) >>= (\tradeType ->
+         readMaybe (trim costStr) >>= (\cost ->
+         if null productStr || cost < 0
+         then Nothing
+         else return (Row productStr tradeType cost)))
       _ -> Nothing
+   where fields = splitString input ','
+
+
+         -- do
+         -- tradeType <- readMaybe (trim tradeTypeStr)
+         -- cost <- readMaybe (trim costStr)
+         -- if productStr == "" || cost < 0 then Nothing else Just (Row productStr tradeType cost)
 
 
 {-
@@ -188,9 +195,13 @@ If both strings have the same length, return the first one.
 -}
 instance Semigroup MaxLen where
    (<>) :: MaxLen -> MaxLen -> MaxLen
-   (<>) (MaxLen xs) (MaxLen ys) = if length xs < length ys then MaxLen { unMaxLen = ys } else MaxLen { unMaxLen = xs }
-
-
+   (<>) (MaxLen xs) (MaxLen ys) =
+     if longerFirst xs ys then MaxLen xs else MaxLen ys
+     where
+       longerFirst [] [] = True  -- Equal length, return first (xs)
+       longerFirst [] _  = False  -- ys is longer
+       longerFirst _  [] = True  -- xs is longer
+       longerFirst (_:xs') (_:ys') = longerFirst xs' ys'  -- Recurse on tails
 
 {-
 It's convenient to represent our stats as a data type that has
