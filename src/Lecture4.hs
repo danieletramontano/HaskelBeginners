@@ -339,8 +339,7 @@ the file doesn't have any products.
 -}
 calculateStats :: String -> String
 calculateStats content =
-   let parsedRows = mapMaybe parseRow dataLines
-   in case parsedRows of
+   case mapMaybe parseRow dataLines of
          [] -> "Nothing Inside"
          x:xs -> displayStats (combineRows (x:|xs))
    where dataLines = drop 1 (lines content)
