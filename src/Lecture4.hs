@@ -80,6 +80,9 @@ errors. You can just ignore invalid rows.
 
 Exercises for Lecture 4 also contain tests and you can run them as usual.
 -}
+{-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE StrictData #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Lecture4
     ( -- * Main running function
@@ -100,9 +103,20 @@ module Lecture4
     , printProductStats
     ) where
 
+
+import System.Environment (getArgs)
+import Data.Char (isSpace)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Semigroup (Max (..), Min (..), Semigroup (..), Sum (..))
+import Data.Maybe (mapMaybe)
 import Text.Read (readMaybe)
+import Data.Foldable (toList)
+import Data.List (foldl')
+
+
+-- Helper function to trim whitespace from both ends of a string
+trim :: String -> String
+trim = dropWhile isSpace . reverse . dropWhile isSpace . reverse
 
 {- In this exercise, instead of writing the entire program from
 scratch, you're offered to complete the missing parts.
@@ -134,8 +148,24 @@ errors. We will simply return an optional result here.
 🕯 HINT: Use the 'readMaybe' function from the 'Text.Read' module.
 -}
 
+splitString :: String -> Char -> [String]
+splitString [] _ = []
+splitString str delimiter =
+    let (before, after) = break (== delimiter) str
+    in case after of
+        [] -> [before]  -- No more delimiters found
+        (_:rest) -> before : splitString rest delimiter
+
 parseRow :: String -> Maybe Row
-parseRow = error "TODO"
+parseRow input = do
+   let fields = splitString input ','
+   case fields of
+      [productStr, tradeTypeStr, costStr] -> do
+         tradeType <- readMaybe (trim tradeTypeStr)
+         cost <- readMaybe (trim costStr)
+         if productStr == "" || cost < 0 then Nothing else Just (Row productStr tradeType cost)
+      _ -> Nothing
+
 
 {-
 We have almost all we need to calculate final stats in a simple and
@@ -157,6 +187,9 @@ string.
 If both strings have the same length, return the first one.
 -}
 instance Semigroup MaxLen where
+   (<>) :: MaxLen -> MaxLen -> MaxLen
+   (<>) (MaxLen xs) (MaxLen ys) = if length xs < length ys then MaxLen { unMaxLen = ys } else MaxLen { unMaxLen = xs }
+
 
 
 {-
@@ -183,7 +216,25 @@ The 'Stats' data type has multiple fields. All these fields have
 instance for the 'Stats' type itself.
 -}
 
+strictSumMaybe :: Semigroup a => Maybe a -> Maybe a -> Maybe a
+strictSumMaybe Nothing Nothing = Nothing
+strictSumMaybe Nothing (Just !y) = Just y
+strictSumMaybe (Just !x) Nothing = Just x
+strictSumMaybe (Just !x) (Just !y) = let !combined = x <> y in Just combined
+
+
 instance Semigroup Stats where
+   (<>) stats1 stats2 = Stats
+       { statsTotalPositions = statsTotalPositions stats1 <> statsTotalPositions stats2
+       , statsTotalSum       = statsTotalSum stats1 <> statsTotalSum stats2
+       , statsAbsoluteMax    = statsAbsoluteMax stats1 <> statsAbsoluteMax stats2
+       , statsAbsoluteMin    = statsAbsoluteMin stats1 <> statsAbsoluteMin stats2
+       , statsSellMax        = strictSumMaybe (statsSellMax stats1) (statsSellMax stats2)
+       , statsSellMin        = strictSumMaybe (statsSellMin stats1) (statsSellMin stats2)
+       , statsBuyMax         = strictSumMaybe (statsBuyMax stats1) (statsBuyMax stats2)
+       , statsBuyMin         = strictSumMaybe (statsBuyMin stats1) (statsBuyMin stats2)
+       , statsLongest        = statsLongest stats1 <> statsLongest stats2
+       }
 
 
 {-
@@ -200,7 +251,18 @@ row in the file.
 -}
 
 rowToStats :: Row -> Stats
-rowToStats = error "TODO"
+rowToStats (Row prod tradeType cost) =
+   Stats
+   { statsTotalPositions = Sum 1
+   , statsTotalSum = Sum (if tradeType == Buy then -cost else cost)
+   , statsAbsoluteMax = Max cost
+   , statsAbsoluteMin = Min cost
+   , statsSellMax = if tradeType == Sell then Just (Max cost) else Nothing
+   , statsSellMin = if tradeType == Sell then Just (Min cost) else Nothing
+   , statsBuyMax = if tradeType == Buy then Just (Max cost) else Nothing
+   , statsBuyMin = if tradeType == Buy then Just (Min cost) else Nothing
+   , statsLongest = MaxLen prod
+   }
 
 {-
 Now, after we learned to convert a single row, we can convert a list of rows!
@@ -226,7 +288,10 @@ implement the next task.
 -}
 
 combineRows :: NonEmpty Row -> Stats
-combineRows = error "TODO"
+combineRows (x:|xs) = foldl' strictCombine (rowToStats x) xs
+  where
+    strictCombine !stats !row =
+        let !combined = stats <> rowToStats row in combined
 
 {-
 After we've calculated stats for all rows, we can then pretty-print
@@ -237,7 +302,21 @@ you can return string "no value".
 -}
 
 displayStats :: Stats -> String
-displayStats = error "TODO"
+displayStats stats = unlines
+    [ "Total positions        : " ++ show (getSum (statsTotalPositions stats))
+    , "Total final balance    : " ++ show (getSum (statsTotalSum stats))
+    , "Biggest absolute cost  : " ++ show (getMax (statsAbsoluteMax stats))
+    , "Smallest absolute cost : " ++ show (getMin (statsAbsoluteMin stats))
+    , "Max earning            : " ++ formatMaybe (statsSellMax stats)
+    , "Min earning            : " ++ formatMaybe (statsSellMin stats)
+    , "Max spending           : " ++ formatMaybe (statsBuyMax stats)
+    , "Min spending           : " ++ formatMaybe (statsBuyMin stats)
+    , "Longest product name   : " ++ unMaxLen (statsLongest stats)
+    ]
+  where
+   formatMaybe :: (Show a, Foldable f) => Maybe (f a) -> String
+   formatMaybe Nothing  = "no value"
+   formatMaybe (Just fx) = show (head (toList fx))
 
 {-
 Now, we definitely have all the pieces in places! We can write a
@@ -255,9 +334,13 @@ the file doesn't have any products.
 
 🕯 HINT: Have a look at 'mapMaybe' function from 'Data.Maybe' (you may need to import it).
 -}
-
 calculateStats :: String -> String
-calculateStats = error "TODO"
+calculateStats content =
+   let parsedRows = mapMaybe parseRow dataLines
+   in case parsedRows of
+         [] -> "Nothing Inside"
+         x:xs -> displayStats (combineRows (x:|xs))
+   where dataLines = drop 1 (lines content)
 
 {- The only thing left is to write a function with side-effects that
 takes a path to a file, reads its content, calculates stats and prints
@@ -267,7 +350,9 @@ Use functions 'readFile' and 'putStrLn' here.
 -}
 
 printProductStats :: FilePath -> IO ()
-printProductStats = error "TODO"
+printProductStats filePath = do
+    content <- readFile filePath
+    putStrLn (calculateStats content)
 
 {-
 Okay, I lied. This is not the last thing. Now, we need to wrap
@@ -282,8 +367,14 @@ CLI args:
 https://hackage.haskell.org/package/base-4.16.0.0/docs/System-Environment.html#v:getArgs
 -}
 
+
 main :: IO ()
-main = error "TODO"
+main = do
+    args <- getArgs
+    case args of
+        [filePath] -> printProductStats filePath
+        [] -> putStrLn "Error: Please provide a file path as an argument"
+        _ -> putStrLn "Error: Too many arguments. Please provide exactly one file path"
 
 
 {-
@@ -316,7 +407,7 @@ The naive and straightforward implementation of this task most likely
 contains space leaks. To implement the optimal streaming and lazy
 solution, consider doing the following improvements:
 
-  1. Enable the {-# LANGUAGE StrictData #-} pragma to this module.
+  1. Enable the {-# LANGUAGE StrictData #-} pragma to this module. OK
 
      * Fields in Haskell data types are lazy by default. So, when
        combining 'Stats' with <>, fields on the new 'Stats' value are
@@ -330,9 +421,9 @@ solution, consider doing the following improvements:
        individual line in the file is short and traversing it only
        once won't bring lots of performance improvements.
 
-  3. Don't use 'length' to calculate the total number of rows.
+  3. Don't use 'length' to calculate the total number of rows. OK
 
-  4. Replace 'sconcat' in 'combineRows' with foldl' or manual recursive
+  4. Replace 'sconcat' in 'combineRows' with foldl' or manual recursive OK
      function using {-# LANGUAGE BangPatterns #-} and strict
      accumulator of type 'Stats'.
 
@@ -341,7 +432,7 @@ solution, consider doing the following improvements:
        difference if you don't force the 'Stats' accumulator itself.
 
   5. Combine fields of type 'Maybe' in the 'Stats' data type with a
-     stricter version of '<>'.
+     stricter version of '<>'. OK
 
      * The 'Semigroup' instance for 'Maybe' (that you've probably used
        for implementing the 'Semigroup' instance for 'Stats') is lazy
